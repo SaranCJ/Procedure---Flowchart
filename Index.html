@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowchart</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden; /* Prevent body scrolling */
+        }
+        .side-panel {
+            width: 200px;
+            padding: 30px;
+            border-right: 1px solid #ccc;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .side-panel h3 {
+            text-align: center;
+        }
+        .side-panel .list-container {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .side-panel .item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            background-color: #f9f9f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .side-panel .item .panel-number {
+            font-weight: bold;
+            order: 2;
+            margin-left: 10px;
+        }
+        .side-panel .item .text {
+            order: 1;
+        }
+        .side-panel .add-button {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            background-color: #e0e0e0;
+            text-align: center;
+        }
+        .shape-templates {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .shape-templates .shape {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .shape-templates .rectangle {
+            background-color: #b0c4de;
+        }
+        .shape-templates .circle {
+            background-color: #FFDB58;
+            border-radius: 50%;
+        }
+        .board-container {
+            position: relative;
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            padding: 20px;
+            overflow: hidden;
+        }
+        .board {
+            position: relative;
+            height: 100%;
+            width: 100%;
+            border: 2px dashed #000;
+            overflow: hidden;
+        }
+        .circle, .rectangle {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            flex-direction: column;
+            text-align: center;
+        }
+        .circle {
+            border: 1px solid #000;
+            border-radius: 50%;
+            width: 100px;
+            height: 100px;
+            background-color: #FFDB58;
+        }
+        .rectangle {
+            border: 1px solid #000;
+            width: 140px;
+            height: 70px;
+            background-color: #b0c4de;
+        }
+        .shape-number {
+            border: 1px solid #000;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            background-color: yellow;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
+        .circle .text, .rectangle .text {
+            text-align: center;
+            word-wrap: break-word;
+        }
+        .circle.selected, .rectangle.selected {
+            outline: 2px solid red;
+        }
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .export-button, .upload-button, .file-button {
+            position: relative;
+            padding: 10px;
+            background-color: #b0c4de;
+            cursor: pointer;
+            border: 1px solid #000;
+            transition: transform 0.2s, background-color 0.2s;
+            margin-top: 10px;
+        }
+        .file-button {
+            margin-top: 0;
+        }
+        .export-button.clicked, .upload-button.clicked, .file-button.clicked {
+            background-color: #6b8e23;
+        }
+        .export-button:active, .upload-button:active, .file-button:active {
+            transform: scale(0.9);
+        }
+        .output {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+        #fileUpload {
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="side-panel">
+        <div class="shape-templates">
+            <div class="shape rectangle" draggable="true" id="templateRectangle"></div>
+            <div class="shape circle" draggable="true" id="templateCircle"></div>
+        </div>
+        <h3>Sequence</h3>
+        <div class="list-container">
+            <!-- List items will be inserted here -->
+        </div>
+        <div class="add-button" id="addButton">Add Seq +</div>
+    </div>
+    <div class="board-container">
+        <input type="file" id="fileUpload" accept=".json" class="file-button">
+        <button class="upload-button" id="uploadButton">Upload JSON</button>
+        <button class="export-button" id="exportButton">Export</button>
+        <div class="board" id="board">
+            <svg id="svg-board">
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="black" />
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+        <div class="output" id="output"></div>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        const svgBoard = document.getElementById('svg-board');
+        const addButton = document.getElementById('addButton');
+        const exportButton = document.getElementById('exportButton');
+        const templateRectangle = document.getElementById('templateRectangle');
+        const templateCircle = document.getElementById('templateCircle');
+        const output = document.getElementById('output');
+        const fileUpload = document.getElementById('fileUpload');
+        const uploadButton = document.getElementById('uploadButton');
+        const listContainer = document.querySelector('.list-container');
+        let startCircle = null;
+        let arrows = [];
+        let itemCount = 0;
+        let selectedCircle = null;
+
+        board.addEventListener('dragover', dragOver);
+        board.addEventListener('drop', drop);
+        board.addEventListener('click', function(e) {
+            if (e.target === board) {
+                deselectCircle();
+            }
+        });
+
+        addButton.addEventListener('click', addItem);
+        exportButton.addEventListener('click', function() {
+            exportProcedureList();
+        });
+
+        uploadButton.addEventListener('click', function() {
+            fileUpload.click();
+        });
+
+        fileUpload.addEventListener('change', function() {
+            const file = fileUpload.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = JSON.parse(e.target.result);
+                    displayData(data);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Delete' && selectedCircle) {
+                board.removeChild(selectedCircle);
+                removeArrowsForCircle(selectedCircle);
+                selectedCircle = null;
+            }
+        });
+
+        function dragStart(e) {
+            e.dataTransfer.setData('text', e.target.id);
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+        }
+
+        board.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const shapeClass = e.dataTransfer.getData('shape');
+            if (shapeClass && selectedCircle) {
+                const number = selectedCircle.querySelector('.shape-number').textContent;
+                const text = selectedCircle.querySelector('.text').textContent;
+
+                const newShape = document.createElement('div');
+                newShape.className = shapeClass === 'rectangle' ? 'rectangle' : 'circle';
+                newShape.style.left = selectedCircle.style.left;
+                newShape.style.top = selectedCircle.style.top;
+
+                const numberDiv = document.createElement('div');
+                numberDiv.className = 'shape-number';
+                numberDiv.textContent = number;
+                newShape.appendChild(numberDiv);
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'text';
+                textDiv.textContent = text;
+                newShape.appendChild(textDiv);
+
+                board.removeChild(selectedCircle);
+                board.appendChild(newShape);
+
+                makeDraggable(newShape);
+                enableArrowCreation(newShape);
+                newShape.addEventListener('click', selectCircle);
+
+                arrows.forEach(arrow => {
+                    if (arrow.start === selectedCircle) {
+                        arrow.start = newShape;
+                    }
+                    if (arrow.end === selectedCircle) {
+                        arrow.end = newShape;
+                    }
+                });
+
+                selectedCircle = newShape;
+                updateArrows();
+            }
+        });
+
+        function drop(e) {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text');
+            const item = document.getElementById(id);
+            const number = item.getAttribute('data-number');
+            const text = item.querySelector('.text').textContent;
+
+            const shape = document.createElement('div');
+            shape.className = id.includes('Rectangle') ? 'rectangle' : 'circle';
+            shape.style.left = `${e.clientX - board.getBoundingClientRect().left - (shape.className === 'rectangle' ? 70 : 60)}px`;
+            shape.style.top = `${e.clientY - board.getBoundingClientRect().top - (shape.className === 'rectangle' ? 35 : 60)}px`;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'text';
+            textDiv.textContent = text;
+            shape.appendChild(textDiv);
+
+            const numberDiv = document.createElement('div');
+            numberDiv.className = 'shape-number';
+            numberDiv.textContent = number;
+            shape.appendChild(numberDiv);
+
+            board.appendChild(shape);
+
+            makeDraggable(shape);
+            enableArrowCreation(shape);
+            shape.addEventListener('click', selectCircle);
+        }
+
+        templateRectangle.addEventListener('dragstart', dragStartTemplate);
+        templateCircle.addEventListener('dragstart', dragStartTemplate);
+
+        function dragStartTemplate(e) {
+            e.dataTransfer.setData('shape', e.target.className.includes('rectangle') ? 'rectangle' : 'circle');
+        }
+
+        function makeDraggable(element) {
+            let offsetX, offsetY;
+
+            element.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                const rect = element.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+
+                function onMouseMove(e) {
+                    e.preventDefault();
+                    element.style.left = `${e.clientX - board.getBoundingClientRect().left - offsetX}px`;
+                    element.style.top = `${e.clientY - board.getBoundingClientRect().top - offsetY}px`;
+
+                    updateArrows();
+                }
+
+                function onMouseUp() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        function enableArrowCreation(element) {
+            element.addEventListener('mousedown', function(e) {
+                if (e.ctrlKey && e.button === 0) {
+                    startCircle = element;
+                } else if (e.ctrlKey && e.button === 2) {
+                    if (startCircle) {
+                        createArrow(startCircle, element);
+                        startCircle = null;
+                    }
+                }
+            });
+        }
+
+        function createArrow(start, end) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("stroke", "black");
+            line.setAttribute("stroke-width", "2");
+            line.setAttribute("marker-end", "url(#arrowhead)");
+            svgBoard.appendChild(line);
+
+            arrows.push({ line, start, end });
+            updateArrow(line, start, end);
+
+            line.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                svgBoard.removeChild(line);
+                const index = arrows.findIndex(arrow => arrow.line === line);
+                if (index !== -1) arrows.splice(index, 1);
+            });
+        }
+
+        function updateArrow(line, start, end) {
+            const startRect = start.getBoundingClientRect();
+            const endRect = end.getBoundingClientRect();
+            const startX = startRect.left + startRect.width / 2;
+            const startY = startRect.top + startRect.height / 2;
+            const endX = endRect.left + endRect.width / 2;
+            const endY = endRect.top + endRect.height / 2;
+
+            const angle = Math.atan2(endY - startY, endX - startX);
+
+            const startDx = (start.classList.contains('circle') ? startRect.width / 2 : startRect.width / 2) * Math.cos(angle);
+            const startDy = (start.classList.contains('circle') ? startRect.height / 2 : startRect.height / 2) * Math.sin(angle);
+            const endDx = (end.classList.contains('circle') ? endRect.width / 2 : endRect.width / 2) * Math.cos(angle);
+            const endDy = (end.classList.contains('circle') ? endRect.height / 2 : endRect.height / 2) * Math.sin(angle);
+
+            const x1 = startX + startDx - board.getBoundingClientRect().left;
+            const y1 = startY + startDy - board.getBoundingClientRect().top;
+            const x2 = endX - endDx - board.getBoundingClientRect().left;
+            const y2 = endY - endDy - board.getBoundingClientRect().top;
+
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+        }
+
+        function updateArrows() {
+            arrows.forEach(({ line, start, end }) => updateArrow(line, start, end));
+        }
+
+        function addItem() {
+            itemCount++;
+            const newItem = document.createElement('div');
+            newItem.className = 'item';
+            newItem.setAttribute('draggable', 'true');
+            newItem.setAttribute('id', `item${itemCount}`);
+            newItem.setAttribute('data-number', itemCount);
+
+            const numberDiv = document.createElement('div');
+            numberDiv.className = 'panel-number';
+            numberDiv.textContent = itemCount;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'text';
+            textDiv.textContent = `New Item ${itemCount}`;
+            textDiv.setAttribute('contenteditable', 'true');
+
+            newItem.appendChild(numberDiv);
+            newItem.appendChild(textDiv);
+
+            newItem.addEventListener('dragstart', dragStart);
+            newItem.addEventListener('dblclick', enableEditing);
+
+            listContainer.appendChild(newItem);
+        }
+
+        function enableEditing(e) {
+            const textDiv = e.target.querySelector('.text');
+            if (textDiv) {
+                textDiv.setAttribute('contenteditable', 'true');
+                textDiv.focus();
+                textDiv.addEventListener('blur', disableEditing);
+            }
+        }
+
+        function disableEditing(e) {
+            e.target.setAttribute('contenteditable', 'false');
+        }
+
+        function selectCircle(e) {
+            if (selectedCircle) {
+                selectedCircle.classList.remove('selected');
+            }
+            selectedCircle = e.currentTarget;
+            selectedCircle.classList.add('selected');
+            e.stopPropagation();
+        }
+
+        function deselectCircle() {
+            if (selectedCircle) {
+                selectedCircle.classList.remove('selected');
+                selectedCircle = null;
+            }
+        }
+
+        function removeArrowsForCircle(circle) {
+            arrows.forEach(({ line, start, end }) => {
+                if (start === circle || end === circle) {
+                    svgBoard.removeChild(line);
+                }
+            });
+            arrows = arrows.filter(({ start, end }) => start !== circle && end !== circle);
+        }
+
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+
+        document.querySelectorAll('.circle').forEach(circle => {
+            circle.addEventListener('click', selectCircle);
+        });
+
+        function displayData(data) {
+            // Get existing sequences
+            const existingSequences = new Set();
+            document.querySelectorAll('.item').forEach(item => {
+                const number = item.querySelector('.panel-number').textContent;
+                existingSequences.add(number.trim());
+            });
+
+            // Add new items from JSON data if they don't already exist
+            data.forEach((procedure, index) => {
+                const number = procedure.value_C_with_comma.replace(',', '').trim();
+                const text = procedure.value_B;
+                if (!existingSequences.has(number)) {
+                    addItemToSidePanel(number, text, itemCount + 1 + index); // Adjusted to continue numbering
+                    existingSequences.add(number); // Add the new sequence to the set
+                }
+            });
+
+            // Adjust itemCount to the latest count
+            itemCount += data.length;
+        }
+
+        function addItemToSidePanel(number, text, index) {
+            const newItem = document.createElement('div');
+            newItem.className = 'item';
+            newItem.setAttribute('draggable', 'true');
+            newItem.setAttribute('id', `item${index}`);
+            newItem.setAttribute('data-number', number);
+
+            const numberDiv = document.createElement('div');
+            numberDiv.className = 'panel-number';
+            numberDiv.textContent = number;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'text';
+            textDiv.textContent = text;
+            textDiv.setAttribute('contenteditable', 'true');
+
+            newItem.appendChild(numberDiv);
+            newItem.appendChild(textDiv);
+
+            newItem.addEventListener('dragstart', dragStart);
+            newItem.addEventListener('dblclick', enableEditing);
+
+            listContainer.appendChild(newItem);
+        }
+
+        function getProcedureList() {
+            const procedures = document.querySelectorAll('.rectangle');
+            const procedureList = {};
+
+            procedures.forEach(procedure => {
+                const number = procedure.querySelector('.shape-number');
+                const text = procedure.querySelector('.text');
+                if (!number || !text) {
+                    console.error('Missing number or text in procedure:', procedure);
+                    return;
+                }
+
+                const procedureSequence = buildSequence(procedure);
+                procedureList[text.textContent] = {
+                    sequence: procedureSequence
+                };
+            });
+
+            return procedureList;
+        }
+
+        function buildSequence(procedure) {
+            const sequence = [];
+            const visited = new Set();
+
+            function traverse(node) {
+                if (visited.has(node)) return;
+                visited.add(node);
+
+                const text = node.querySelector('.text').textContent;
+                const number = node.querySelector('.shape-number').textContent;
+                sequence.unshift({ text, number });
+
+                const incomingArrows = arrows.filter(arrow => arrow.end === node);
+                incomingArrows.forEach(arrow => {
+                    traverse(arrow.start);
+                });
+            }
+
+            traverse(procedure);
+            return sequence;
+        }
+
+        function exportProcedureList() {
+            const procedureList = getProcedureList();
+            const formattedProcedureList = {};
+
+            Object.keys(procedureList).forEach(key => {
+                const sequences = procedureList[key].sequence.map(item => {
+                    return { [item.text]: item.number };
+                });
+
+                formattedProcedureList[key] = { sequence: sequences };
+            });
+
+            const json = JSON.stringify(formattedProcedureList, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'procedure_list.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
